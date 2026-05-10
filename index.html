@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ידידים - איתור מנוע חכם</title>
+    <style>
+        :root {
+            --bg: #0a192f;
+            --card: #112240;
+            --y-blue: #004c8c;
+            --y-cyan: #479cd5;
+            --y-green: #88c057;
+            --y-pink: #e05695;
+            --text: #f8fafc;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 20px; }
+
+        .header { text-align: center; border-bottom: 2px solid var(--y-blue); padding-bottom: 15px; }
+        .header h1 { color: var(--y-cyan); font-size: 26px; margin: 0; }
+        .header span { color: var(--y-green); font-size: 14px; }
+
+        .search-box { position: relative; }
+        input {
+            width: 100%; padding: 16px; border-radius: 12px; border: 2px solid var(--y-blue);
+            background: var(--card); color: white; font-size: 18px; outline: none;
+        }
+        input:focus { border-color: var(--y-cyan); }
+
+        .list {
+            position: absolute; top: 100%; left: 0; right: 0; background: var(--card);
+            border: 1px solid var(--y-blue); border-radius: 0 0 12px 12px;
+            max-height: 250px; overflow-y: auto; z-index: 100; padding: 0; margin: 0; list-style: none;
+        }
+        .list li { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+        .list li:hover { background: var(--y-blue); }
+
+        .results { display: none; flex-direction: column; gap: 15px; }
+        .card {
+            background: var(--card); padding: 20px; border-radius: 12px;
+            border-right: 6px solid var(--y-cyan); box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .card h3 { margin: 0 0 10px 0; color: var(--y-green); }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 16px; }
+        .label { color: #94a3b8; }
+
+        .reset-btn {
+            background: var(--y-blue); color: white; border: none; padding: 16px;
+            border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px;
+        }
+        .hidden { display: none !important; }
+        .step-indicator { font-size: 14px; color: var(--y-pink); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>כונן-נפח: ידידים</h1>
+        <span>עזרה בדרכים - איתור נתוני רכב</span>
+    </div>
+
+    <div id="search-section">
+        <div id="step-text" class="step-indicator">שלב 1: בחר יצרן רכב</div>
+        <div class="search-box">
+            <input type="text" id="car-search" placeholder="הקלד שם חברה..." autocomplete="off">
+            <ul id="list-output" class="list hidden"></ul>
+        </div>
+    </div>
+
+    <div id="results-section" class="results">
+        <h2 id="res-title" style="text-align:center;"></h2>
+        <div id="cards-box"></div>
+        <button class="reset-btn" onclick="resetApp()">🔄 חיפוש רכב חדש</button>
+    </div>
+</div>
+
+<script>
+    // --- בסיס הנתונים הענק שבנית ---
+    const carDB = {
+        "אאודי": ["100", "80", "A1", "A3", "A4", "A5", "A6", "A7", "A8", "E-tron", "Q2", "Q3", "Q5", "Q7", "Q8", "TT"],
+        "אופל": ["אינסיגניה", "אסטרה", "גרנדלנד", "מוקה", "קורסה", "קומבו", "זאפירה"],
+        "ב.מ.וו": ["סדרה 1", "סדרה 2", "סדרה 3", "סדרה 4", "סדרה 5", "סדרה 7", "X1", "X3", "X5", "X6", "i3", "i4", "iX"],
+        "טויוטה": ["קורולה", "יאריס", "RAV4", "קאמרי", "לנד קרוזר", "C-HR", "הילקס", "פריוס", "אייגו"],
+        "יונדאי": ["i10", "i20", "i30", "איוניק", "טוסון", "סנטה פה", "אלנטרה", "קונה", "וניו"],
+        "קיה": ["פיקנטו", "ריו", "ספורטאז'", "סורנטו", "נירו", "סיד", "סטוניק"],
+        "מאזדה": ["2", "3", "6", "CX-3", "CX-30", "CX-5", "CX-9", "לאנטיס"],
+        "סקודה": ["אוקטביה", "פאביה", "סופרב", "קודיאק", "קארוק", "קאמיק"],
+        "פולקסווגן": ["גולף", "פולו", "פאסאט", "טיגואן", "קאדי", "טרנספורטר"],
+        "שברולט": ["ספארק", "מאליבו", "טראקס", "אקווינוקס", "סילברדו", "קרוז"],
+        "ניסאן": ["מיקרה", "ג'וק", "קשקאי", "X-Trail", "אלטימה", "סנטרה"],
+        "הונדה": ["סיוויק", "ג'אז", "HR-V", "CR-V", "אקורד"],
+        "פורד": ["פוקוס", "פיאסטה", "קוסטום", "אקספלורר", "F-150", "קוגה"],
+        "סוזוקי": ["סוויפט", "בלנו", "ויטרה", "ג'ימני", "קרוסאובר", "איגניס"],
+        "מיצובישי": ["אאוטלנדר", "אטראז'", "ספייס סטאר", "טריטון", "ASX"],
+        "רנו": ["קליאו", "מגאן", "קפצ'ור", "קנגו", "זואי", "גרנד סניק"],
+        "סיאט": ["איביזה", "לאון", "ארונה", "אטקה"]
+        // ניתן להוסיף כאן את כל שאר הרשימה באותו פורמט...
+    };
+
+    // נתונים טכניים לדוגמה (ניתן להרחיב לכל שנה)
+    const engineSpecs = {
+        "טויוטה קורולה": [
+            { year: "2023-2024", volume: "1,798", fuel: "היברידי", hp: "140" },
+            { year: "2019-2022", volume: "1,798", fuel: "היברידי", hp: "122" },
+            { year: "2013-2018", volume: "1,598", fuel: "בנזין", hp: "132" }
+        ],
+        "יונדאי טוסון": [
+            { year: "2021-2024", volume: "1,598 (T)", fuel: "בנזין", hp: "180" },
+            { year: "2016-2020", volume: "1,999", fuel: "בנזין", hp: "155" }
+        ],
+        "קיה פיקנטו": [
+            { year: "2017-2024", volume: "1,200", fuel: "בנזין", hp: "84" }
+        ]
+    };
+
+    let step = "BRAND"; 
+    let selectedBrand = "";
+
+    const searchInput = document.getElementById('car-search');
+    const listOutput = document.getElementById('list-output');
+    const stepText = document.getElementById('step-text');
+
+    searchInput.addEventListener('input', function() {
+        const val = this.value.trim().toLowerCase();
+        listOutput.innerHTML = "";
+        
+        if (!val) { listOutput.classList.add('hidden'); return; }
+
+        let matches = [];
+        if (step === "BRAND") {
+            matches = Object.keys(carDB).filter(b => b.includes(val));
+        } else {
+            matches = carDB[selectedBrand].filter(m => m.toLowerCase().includes(val));
+        }
+
+        if (matches.length > 0) {
+            listOutput.classList.remove('hidden');
+            matches.forEach(m => {
+                const li = document.createElement('li');
+                li.textContent = m;
+                li.onclick = () => selectItem(m);
+                listOutput.appendChild(li);
+            });
+        } else {
+            listOutput.classList.add('hidden');
+        }
+    });
+
+    function selectItem(item) {
+        if (step === "BRAND") {
+            selectedBrand = item;
+            step = "MODEL";
+            searchInput.value = "";
+            searchInput.placeholder = `חפש דגם של ${item}...`;
+            stepText.textContent = `שלב 2: בחר דגם של חברת ${item}`;
+            listOutput.classList.add('hidden');
+            searchInput.focus();
+        } else {
+            showResults(selectedBrand, item);
+        }
+    }
+
+    function showResults(brand, model) {
+        document.getElementById('search-section').classList.add('hidden');
+        const resSec = document.getElementById('results-section');
+        resSec.classList.remove('hidden');
+        resSec.style.display = 'flex';
+        document.getElementById('res-title').textContent = `${brand} ${model}`;
+        
+        const cardsBox = document.getElementById('cards-box');
+        cardsBox.innerHTML = "";
+
+        const key = `${brand} ${model}`;
+        const data = engineSpecs[key] || [{ year: "כל השנים", volume: "בדוק פיזית", fuel: "לא הוזן", hp: "---" }];
+
+        data.forEach(d => {
+            const c = document.createElement('div');
+            c.className = "card";
+            c.innerHTML = `
+                <h3>שנתון: ${d.year}</h3>
+                <div class="info-row"><span class="label">נפח מנוע:</span> <span>${d.volume} סמ"ק</span></div>
+                <div class="info-row"><span class="label">סוג דלק:</span> <span>${d.fuel}</span></div>
+                <div class="info-row"><span class="label">הספק:</span> <span>${d.hp} כ"ס</span></div>
+            `;
+            cardsBox.appendChild(c);
+        });
+    }
+
+    function resetApp() {
+        step = "BRAND";
+        selectedBrand = "";
+        searchInput.value = "";
+        searchInput.placeholder = "הקלד שם חברה...";
+        stepText.textContent = "שלב 1: בחר יצרן רכב";
+        document.getElementById('search-section').classList.remove('hidden');
+        document.getElementById('results-section').style.display = 'none';
+        listOutput.classList.add('hidden');
+    }
+</script>
+</body>
+</html>
